@@ -16,12 +16,17 @@ from pythonosc import dispatcher
 from pythonosc import osc_server
 
 from collections import deque
-EEG_MEM = deque(maxlen=750) #3 seconds at 250 packets per second
-ALPHA_MEM = deque(maxlen=750)
-THETA_MEM = deque(maxlen=750)
-BETA_MEM = deque(maxlen=750)
-GAMMA_MEM = deque(maxlen=750)
-DELTA_MEM = deque(maxlen=750)
+
+MEM_SIZE = 750
+OPEN_EYES_CHECK_PERIOD = 250
+BLINK_CHECK_PERIOD = 250
+INIT_ZEROS = MEM_SIZE*[np.array([0, 0, 0, 0])]
+EEG_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+ALPHA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+THETA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+BETA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+GAMMA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+DELTA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
 COUNT = 0
 
 def encode_memory(memory, packet):
@@ -29,6 +34,24 @@ def encode_memory(memory, packet):
 
 def retrieve_memory(memory):
     return np.array(memory)
+
+def clear_eeg_memory():
+    global EEG_MEM
+    EEG_MEM.clear()
+    EEG_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+
+def clear_freq_memory():
+    global ALPHA_MEM, THETA_MEM, BETA_MEM, GAMMA_MEM, DELTA_MEM
+    ALPHA_MEM.clear()
+    THETA_MEM.clear()
+    BETA_MEM.clear()
+    GAMMA_MEM.clear()
+    DELTA_MEM.clear()
+    ALPHA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+    THETA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+    BETA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+    GAMMA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+    DELTA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
 
 def alpha_handler(x, y, a0, a1, a2, a3):
     global ALPHA_M
@@ -59,11 +82,17 @@ def eeg_handler(x, y, ch0, ch1, ch2, ch3, AUX):
     """
     Event handler that gets called for every data point sent over from the Muse headset.
     """
+    global COUNT
+    global EEG_MEM
     eeg_packet = np.around(np.array([ch0, ch1, ch2, ch3]), decimals=3)
     encode_memory(EEG_MEM, eeg_packet)
-    global COUNT
     COUNT += 1
-
+    if COUNT % BLINK_CHECK_PERIOD == 0:
+        is_double_blink()
+        clear_eeg_memory()
+    if COUNT % OPEN_EYES_CHECK_PERIOD == 0:
+        is_open()
+        clear_freq_memory()
 def start():
     """
     Starts a UDP server on localhost:5000 listening for incoming OSC data on /muse/eeg.
