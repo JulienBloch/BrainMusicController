@@ -17,11 +17,12 @@ from pythonosc import osc_server
 
 from collections import deque
 
-MEM_SIZE = 750
-OPEN_EYES_CHECK_PERIOD = 250
+MEM_SIZE = 40
+MEM_SIZE2 = 500
+OPEN_EYES_CHECK_PERIOD = 500
 BLINK_CHECK_PERIOD = 250
-INIT_ZEROS = MEM_SIZE*[np.array([0, 0, 0, 0])]
-EEG_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
+INIT_ZEROS = MEM_SIZE*[np.array([0.001, 0.001, 0.001, 0.001])]
+EEG_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE2)
 ALPHA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
 THETA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
 BETA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
@@ -29,11 +30,13 @@ GAMMA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
 DELTA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
 COUNT = 0
 
-delta_open_weights = [ 0.0164661,  -0.01573119, 0.05818026, 0.03564979]
-theta_open_weights = [-0.00695582, -0.14155933, 0.02326366, 0.41959217]
-alpha_open_weights = [-0.52612051, -0.13047199, 0.17493479, -0.55373638]
-beta_open_weights = [0.01684762, 0.59603239, 0.043977, 0.41589642]
-gamma_open_weights = [0.30813941, 0.59168426, -0.36140276, 0.1330982]
+weight_map = np.loadtxt('weights.csv', delimiter=',')
+
+delta_open_weights = weight_map[0:4]
+theta_open_weights = weight_map[4:8]
+alpha_open_weights = weight_map[8:12]
+beta_open_weights = weight_map[12:16]
+gamma_open_weights = weight_map[16:20]
 open_weights = [delta_open_weights, theta_open_weights, alpha_open_weights, beta_open_weights, gamma_open_weights]
 
 EYE_STATE = True
@@ -44,7 +47,8 @@ def is_open():
     for mem in [DELTA_MEM, THETA_MEM, ALPHA_MEM, BETA_MEM, GAMMA_MEM]:
         open_value += np.sum(np.mean(np.exp(retrieve_memory(mem)), axis=0) * open_weights[i])
         i += 1
-    if (open_value >= 0):
+    print(open_value)
+    if (open_value >= .1):
         return True
     return False
 
@@ -109,33 +113,32 @@ def eeg_handler(x, y, ch0, ch1, ch2, ch3, AUX):
     if COUNT % BLINK_CHECK_PERIOD == 0:
         if is_double_blink():
             pause_play_song()
-            clear_eeg_memory()
+            # clear_eeg_memory()
     if COUNT % OPEN_EYES_CHECK_PERIOD == 0:
         if eye_changed():
             next_song()
-            clear_freq_memory()
+            # clear_freq_memory()
 
 
 def is_double_blink():
     # first compare average of last 150 packets to new packet
     emem = np.mean(retrieve_memory(EEG_MEM)[:, [0, 3]], axis=1)
-    for i in range(len(emem) - 150 - 10 - 20 - 149 - 20):
+    for i in range(len(emem) - 150 - 10 - 20 - 150 - 20):
         avg = np.mean(emem[i:i+150], axis=0)
         for j in range(10):
             intens_ratio = emem[i+150+j] / avg
-            if (intens_ratio < .95 and intens_ratio != 0):
+            # print(j)
+            if (intens_ratio < .945 and intens_ratio != 0):
                 # print('a')
                 for k in range(5, 25):
-                    if (emem[i+j+k] > avg / intens_ratio / 1.04):
-                        # print('b')
-                        for l in range(20, 160):
-                            if (emem[i+150+j+k+l] < intens_ratio * avg * 1.01):
-                                print('c')
+                    # print(intens_ratio)
+                    if (emem[i+150+j+k] > avg / intens_ratio / 1.04):
+                        for l in range(20, 170):
+                            if (emem[i+150+j+k+l] < intens_ratio * avg):
                                 for k in range(5, 25):
-                                    if (emem[i+j+k] > avg / intens_ratio / 1.04):
+                                    if (emem[i+150+j+k] > avg / intens_ratio / 1.04):
                                         print('Pause / Play')
                                         return True
-    # print('nah')
     return False
 
 def eye_changed():
@@ -144,6 +147,7 @@ def eye_changed():
     if (EYE_STATE != new_eye_state):
         changed = True
         EYE_STATE = new_eye_state
+        print('Changing')
         return True
     return False
 
