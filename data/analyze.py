@@ -23,8 +23,8 @@ print(sol)
 
 # test_data = np.genfromtxt('museOpenTest.csv', delimiter=',', skip_header=1)
 
-test_data = np.genfromtxt('museDPOpen.csv', delimiter=',', skip_header=1)
-test_data = np.exp(test_data)[:,:-1]
+test_data = np.genfromtxt('museClosedTest.csv', delimiter=',', skip_header=1)
+test_data = np.exp(test_data)
 
 print(test_data.shape)
 num_open = 0
@@ -33,8 +33,8 @@ for row in test_data:
 	z = 0
 	for i in range(len(row)):
 		z+= row[i] * sol[i]
-	print(z)
-	if (z >=0):
+	# print(z)
+	if (z <0):
 		num_open += 1
 
 print("accuracy is: " + str(num_open/test_data.shape[0]))

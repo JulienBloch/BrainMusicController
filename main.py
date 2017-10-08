@@ -29,6 +29,25 @@ GAMMA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
 DELTA_MEM = deque(INIT_ZEROS, maxlen=MEM_SIZE)
 COUNT = 0
 
+delta_open_weights = [ 0.0164661,  -0.01573119, 0.05818026, 0.03564979]
+theta_open_weights = [-0.00695582, -0.14155933, 0.02326366, 0.41959217]
+alpha_open_weights = [-0.52612051, -0.13047199, 0.17493479, -0.55373638]
+beta_open_weights = [0.01684762, 0.59603239, 0.043977, 0.41589642]
+gamma_open_weights = [0.30813941, 0.59168426, -0.36140276, 0.1330982]
+open_weights = [delta_open_weights, theta_open_weights, alpha_open_weights, beta_open_weights, gamma_open_weights]
+
+EYE_STATE = True
+
+def is_open():
+    i = 0
+    open_value = 0
+    for mem in [DELTA_MEM, THETA_MEM, ALPHA_MEM, BETA_MEM, GAMMA_MEM]:
+        open_value += np.sum(np.mean(np.exp(retrieve_memory(mem)), axis=0) * open_weights[i])
+        i += 1
+    if (open_value >= 0):
+        return True
+    return False
+
 def encode_memory(memory, packet):
     memory.append(packet)
 
@@ -88,18 +107,59 @@ def eeg_handler(x, y, ch0, ch1, ch2, ch3, AUX):
     encode_memory(EEG_MEM, eeg_packet)
     COUNT += 1
     if COUNT % BLINK_CHECK_PERIOD == 0:
-        is_double_blink()
-        clear_eeg_memory()
+        if is_double_blink():
+            pause_play_song()
+            clear_eeg_memory()
     if COUNT % OPEN_EYES_CHECK_PERIOD == 0:
-        is_open()
-        clear_freq_memory()
+        if eye_changed():
+            next_song()
+            clear_freq_memory()
+
+
+def is_double_blink():
+    # first compare average of last 150 packets to new packet
+    emem = np.mean(retrieve_memory(EEG_MEM)[:, [0, 3]], axis=1)
+    for i in range(len(emem) - 150 - 10 - 20 - 149 - 20):
+        avg = np.mean(emem[i:i+150], axis=0)
+        for j in range(10):
+            intens_ratio = emem[i+150+j] / avg
+            if (intens_ratio < .95 and intens_ratio != 0):
+                # print('a')
+                for k in range(5, 25):
+                    if (emem[i+j+k] > avg / intens_ratio / 1.04):
+                        # print('b')
+                        for l in range(20, 160):
+                            if (emem[i+150+j+k+l] < intens_ratio * avg * 1.01):
+                                print('c')
+                                for k in range(5, 25):
+                                    if (emem[i+j+k] > avg / intens_ratio / 1.04):
+                                        print('Pause / Play')
+                                        return True
+    # print('nah')
+    return False
+
+def eye_changed():
+    global EYE_STATE
+    new_eye_state = is_open()
+    if (EYE_STATE != new_eye_state):
+        changed = True
+        EYE_STATE = new_eye_state
+        return True
+    return False
+
+def pause_play_song():
+    os.system("pytify -pp")
+
+def next_song():
+    os.system("pytify -n")
+
 def start():
     """
     Starts a UDP server on localhost:5000 listening for incoming OSC data on /muse/eeg.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--ip",
-                        default="192.168.1.97",
+                        default="192.168.1.86",
                         help="The ip to listen on")
 
     parser.add_argument("--port",
